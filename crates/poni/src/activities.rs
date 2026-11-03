@@ -582,27 +582,23 @@ pub fn draw_music(ui: &mut Ui, st: &mut AppState, body: Rect, words: bool) {
         let f = oyen::music(st.now, playing, st.media_paused_at);
         oyen::peek(ui.c, &f, cx, bar_y, OYEN_MEDIA_W, body.y + 1.0);
     }
-    // Words over a moving picture need a floor of their own: a scrim under
-    // them, drawn over the bars and under the text.
+    // Words over a moving picture need a floor of their own: the whole pill
+    // darkens, drawn over the bars and under the text, so no edge shows.
     if sings {
         use crate::pill::media::{middle, PAUSED_TEXT, TEXT_CLEAR};
-        text_scrim(ui, body, art.right() + TEXT_CLEAR, eq.x - TEXT_CLEAR, 1.0);
+        text_scrim(ui, body, 1.0);
         middle(ui, st, body, art.right() + TEXT_CLEAR, eq.x - TEXT_CLEAR, if playing { 1.0 } else { PAUSED_TEXT });
     } else if alpha > 0.01 {
-        text_scrim(ui, body, art.right() + 10.0, eq.x - 10.0, alpha);
+        text_scrim(ui, body, alpha);
         draw_peek(ui, st, art.right() + 10.0, eq.x - 10.0, body, alpha);
     }
 }
 
-/// A dark backing for the pill's words, from `x0` to `x1`, so white text stays
-/// readable over the bars moving behind it.
-fn text_scrim(ui: &mut Ui, body: Rect, x0: f32, x1: f32, alpha: f32) {
-    let w = x1 - x0;
-    if w <= 4.0 {
-        return;
-    }
-    let r = Rect::new(x0 - 5.0, body.y + 2.0, w + 10.0, body.h - 4.0);
-    ui.c.fill_rrect(r, 7.0, Color::black(0.62 * alpha));
+/// A dark backing for the pill's words, the size of the pill itself, so white
+/// text stays readable over the bars moving behind it and no edge of the
+/// backing shows.
+fn text_scrim(ui: &mut Ui, body: Rect, alpha: f32) {
+    ui.c.fill_rrect(body, 14.0, Color::black(0.62 * alpha));
 }
 
 /// The equalizer: bars growing up from `r`'s bottom edge, as many as fit at
