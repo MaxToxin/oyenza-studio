@@ -81,6 +81,8 @@ pub enum MenuCmd {
     AppleMusicToken,
     AppleMusicHelp,
     AppleMusicForget,
+    YandexMusicToken,
+    YandexMusicForget,
     OyenzaSignIn,
     OyenzaCancel,
     OyenzaDisconnect,
@@ -138,6 +140,7 @@ pub fn menu_items(s: &Settings, pinned: bool, oyenza: &OyenzaLink, recorder: boo
         item("Synced lyrics", MenuCmd::ToggleLyrics, s.lyrics),
         item("Lyrics pronunciation (romaji, pinyin, Korean)", MenuCmd::TogglePronunciation, s.lyrics_pronunciation),
         apple_music_menu(),
+        yandex_music_menu(),
         oyenza_menu(s, oyenza),
         item("Sounds", MenuCmd::ToggleSounds, s.sounds),
         MenuItem::Sub {
@@ -203,6 +206,17 @@ fn apple_music_menu() -> MenuItem {
         items.push(item("Remove token", MenuCmd::AppleMusicForget, false));
     }
     MenuItem::Sub { label: if on { "Apple Music lyrics: on".into() } else { "Apple Music lyrics".into() }, items }
+}
+
+/// Opt-in lyrics from Yandex Music with the user's own OAuth token.
+fn yandex_music_menu() -> MenuItem {
+    let on = crate::paths::yandex_token_path().exists();
+    let mut items = vec![item("Use token from clipboard", MenuCmd::YandexMusicToken, false)];
+    if on {
+        items.push(MenuItem::Separator);
+        items.push(item("Remove token", MenuCmd::YandexMusicForget, false));
+    }
+    MenuItem::Sub { label: if on { "Yandex Music lyrics: on".into() } else { "Yandex Music lyrics".into() }, items }
 }
 
 /// Oyenza, optional: sign in with a code from oyenza.app, then what the

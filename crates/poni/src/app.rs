@@ -1870,6 +1870,36 @@ impl App {
         self.st.notify(Icon::Lyrics, palette::BLUE, "Apple Music lyrics off", "Lyrics from LRCLIB only", 4.0, None);
     }
 
+    /// Save the Yandex Music OAuth token copied from the browser (sealed with
+    /// DPAPI) and take it off the clipboard.
+    fn use_yandex_music_token(&mut self) {
+        let text = services::clipboard::read_text(self.hwnd).unwrap_or_default();
+        let Some(token) = poni_core::yandex::clean_token(&text) else {
+            self.st.notify(Icon::Lyrics, palette::ORANGE, "No Yandex Music token copied", "Copy access_token first", 6.0, None);
+            return;
+        };
+        if let Err(e) = services::secret::save(&paths::yandex_token_path(), &token) {
+            pwarn!("yandex music: cannot save the token ({e})");
+            self.st.notify(Icon::Lyrics, palette::ORANGE, "Couldn't save the token", "Details in poni.log", 5.0, None);
+            return;
+        }
+        pinfo!("yandex music: token saved");
+        services::clipboard::set_text(self.helper, "");
+        self.refetch_lyrics();
+        self.st.notify(Icon::Lyrics, palette::BLUE, "Yandex Music lyrics on", "LRCLIB fills in the rest", 5.0, None);
+    }
+
+    fn forget_yandex_music_token(&mut self) {
+        if let Err(e) = services::secret::delete(&paths::yandex_token_path()) {
+            pwarn!("yandex music: cannot remove the token ({e})");
+            self.st.notify(Icon::Lyrics, palette::ORANGE, "Couldn't remove the token", "Details in poni.log", 5.0, None);
+            return;
+        }
+        pinfo!("yandex music: token removed");
+        self.refetch_lyrics();
+        self.st.notify(Icon::Lyrics, palette::BLUE, "Yandex Music lyrics off", "Lyrics from LRCLIB only", 4.0, None);
+    }
+
     fn on_apple_music(&mut self, status: AppleMusicStatus) {
         let (color, title, subtitle) = match status {
             AppleMusicStatus::Accepted => (palette::GREEN, "Apple Music lyrics on", "LRCLIB fills in the rest"),
@@ -2443,6 +2473,8 @@ impl App {
             AppleMusicToken => self.use_apple_music_token(),
             AppleMusicHelp => shell::open(APPLE_MUSIC_HELP_URL),
             AppleMusicForget => self.forget_apple_music_token(),
+            YandexMusicToken => self.use_yandex_music_token(),
+            YandexMusicForget => self.forget_yandex_music_token(),
             OyenzaSignIn => self.oyenza(OyenzaCmd::SignIn),
             OyenzaCancel => self.oyenza(OyenzaCmd::Cancel),
             OyenzaDisconnect => self.oyenza(OyenzaCmd::Disconnect),

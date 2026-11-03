@@ -52,6 +52,7 @@ pub mod ttml;
 pub mod update;
 pub mod urlenc;
 pub mod viz;
+pub mod yandex;
 pub mod ytdlp;
 pub mod ytdlp_info;
 pub mod ytdlp_partial;

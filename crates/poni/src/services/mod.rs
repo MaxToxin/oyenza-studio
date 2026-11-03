@@ -38,6 +38,7 @@ pub mod notifications;
 pub mod stocks;
 pub mod sysmon;
 pub mod sysstats;
+pub mod yandex;
 pub mod update;
 pub mod usage;
 pub mod viz;

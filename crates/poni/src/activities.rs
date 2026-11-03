@@ -561,12 +561,11 @@ pub fn draw_music(ui: &mut Ui, st: &mut AppState, body: Rect, words: bool) {
     let cy = body.center().y;
     let art = Rect::new(body.x + 12.0, cy - 11.0, 22.0, 22.0);
     let playing = st.media.as_ref().is_some_and(|m| m.is_playing());
-    // The equalizer runs along the bottom edge, under everything else.
-    // Oyen's theme keeps his bop in its place instead.
+    // The equalizer fills the pill from the art's right edge to its end, so a
+    // bar never runs over the cover. Oyen's theme keeps his bop instead.
     if !oyen::on(st.settings.theme) {
-        // The strip runs the pill's whole height, behind the art and the
-        // words, which are drawn over it.
-        viz_bars(ui, st, Rect::new(body.x + 8.0, body.y + 3.0, body.w - 16.0, body.h - 6.0), playing);
+        let x0 = art.right() + 8.0;
+        viz_bars(ui, st, Rect::new(x0, body.y + 3.0, body.right() - 8.0 - x0, body.h - 6.0), playing);
     }
     art_or_icon(ui, st, art, playing);
     let eq = Rect::new(body.right() - 34.0, cy - 8.0, 20.0, 16.0);
@@ -583,12 +582,27 @@ pub fn draw_music(ui: &mut Ui, st: &mut AppState, body: Rect, words: bool) {
         let f = oyen::music(st.now, playing, st.media_paused_at);
         oyen::peek(ui.c, &f, cx, bar_y, OYEN_MEDIA_W, body.y + 1.0);
     }
+    // Words over a moving picture need a floor of their own: a scrim under
+    // them, drawn over the bars and under the text.
     if sings {
         use crate::pill::media::{middle, PAUSED_TEXT, TEXT_CLEAR};
+        text_scrim(ui, body, art.right() + TEXT_CLEAR, eq.x - TEXT_CLEAR, 1.0);
         middle(ui, st, body, art.right() + TEXT_CLEAR, eq.x - TEXT_CLEAR, if playing { 1.0 } else { PAUSED_TEXT });
     } else if alpha > 0.01 {
+        text_scrim(ui, body, art.right() + 10.0, eq.x - 10.0, alpha);
         draw_peek(ui, st, art.right() + 10.0, eq.x - 10.0, body, alpha);
     }
+}
+
+/// A dark backing for the pill's words, from `x0` to `x1`, so white text stays
+/// readable over the bars moving behind it.
+fn text_scrim(ui: &mut Ui, body: Rect, x0: f32, x1: f32, alpha: f32) {
+    let w = x1 - x0;
+    if w <= 4.0 {
+        return;
+    }
+    let r = Rect::new(x0 - 5.0, body.y + 2.0, w + 10.0, body.h - 4.0);
+    ui.c.fill_rrect(r, 7.0, Color::black(0.62 * alpha));
 }
 
 /// The equalizer: bars growing up from `r`'s bottom edge, as many as fit at
