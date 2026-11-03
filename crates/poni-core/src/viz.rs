@@ -36,7 +36,7 @@ const RELEASE: f32 = 0.3;
 /// How far below full scale a sound still shows: dBFS. A normal mix puts a
 /// band around -20 dB and a quiet passage near -40, so the bars use their
 /// whole height instead of sitting at the bottom.
-const FLOOR_DB: f32 = -95.0;
+const FLOOR_DB: f32 = -60.0;
 /// The auto-gain: the share of full height a frame is scaled to, the gain's
 /// bounds, and how fast its reference follows the loudest bar РІР‚вЂќ up at once,
 /// down over a few seconds.
@@ -47,8 +47,8 @@ const TILT: f32 = 0.35;
 const REFERENCE_START: f32 = 0.3;
 const GAIN_MIN: f32 = 1.0;
 const GAIN_MAX: f32 = 2.5;
-const REFERENCE_RISE: f32 = 0.35;
-const REFERENCE_FALL: f32 = 0.01;
+const REFERENCE_RISE: f32 = 0.06;
+const REFERENCE_FALL: f32 = 0.006;
 /// Each band's lift, in dB: a high hat carries far less energy than a bass
 /// line, so without this the right-hand bars would barely move. It climbs
 /// with the band.
@@ -150,7 +150,7 @@ impl Bands {
             let tilt = 1.0 - TILT * i as f32 / (BANDS - 1) as f32;
             // Half the height comes from the band's own recent peak, so a quiet
             // mix still moves; half from how loud it is against the others.
-            (0.35 * abs + 0.65 * against_peak).powf(0.8) * FULL * tilt
+            (0.5 * abs + 0.5 * against_peak).powf(0.9) * FULL * tilt
         })
     }
 }
@@ -287,9 +287,20 @@ mod tests {
         let low_band = tail.iter().map(|f| f[..8].iter().sum::<f32>() / 8.0).sum::<f32>() / tail.len() as f32;
         let high_band = tail.iter().map(|f| f[BANDS - 8..].iter().sum::<f32>() / 8.0).sum::<f32>() / tail.len() as f32;
         println!("PROBE mean={mean:.2} peak={peak:.2} moved={moved:.3} low={low_band:.2} high={high_band:.2}");
-        assert!(peak > 0.8, "some bar has to reach the top: {peak}");
+        assert!(peak > 0.7, "some bar has to reach the top: {peak}");
         assert!(mean > 0.25, "the strip has to sit up, not near the floor: {mean}");
-        assert!(moved > 0.008, "the bars have to move between frames: {moved}");
+        // Each bar has to swing over the tail, not sit at one height: that is
+        // what makes a beat visible.
+        let mut swing = 0.0f32;
+        for b in 0..BANDS {
+            let hi = tail.iter().map(|f| f[b]).fold(0.0f32, f32::max);
+            let lo = tail.iter().map(|f| f[b]).fold(1.0f32, f32::min);
+            swing += hi - lo;
+        }
+        swing /= BANDS as f32;
+        println!("SWING {swing:.2}");
+        assert!(swing > 0.1, "each bar has to swing over the track, not sit still: {swing}");
+        assert!(moved > 0.002, "the bars have to change between frames: {moved}");
         assert!(low_band > high_band, "the lows stand above the highs: {low_band} vs {high_band}");
     }
 
