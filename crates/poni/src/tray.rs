@@ -82,6 +82,7 @@ pub enum MenuCmd {
     AppleMusicHelp,
     AppleMusicForget,
     YandexMusicToken,
+    YandexMusicHelp,
     YandexMusicForget,
     OyenzaSignIn,
     OyenzaCancel,
@@ -211,7 +212,10 @@ fn apple_music_menu() -> MenuItem {
 /// Opt-in lyrics from Yandex Music with the user's own OAuth token.
 fn yandex_music_menu() -> MenuItem {
     let on = crate::paths::yandex_token_path().exists();
-    let mut items = vec![item("Use token from clipboard", MenuCmd::YandexMusicToken, false)];
+    let mut items = vec![
+        item("Use token from clipboard", MenuCmd::YandexMusicToken, false),
+        item("How to get the token", MenuCmd::YandexMusicHelp, false),
+    ];
     if on {
         items.push(MenuItem::Separator);
         items.push(item("Remove token", MenuCmd::YandexMusicForget, false));
@@ -283,7 +287,7 @@ pub fn show_menu(owner: HWND, pt: POINT, items: &[MenuItem]) -> Option<MenuCmd> 
         let cmd = if idx == 0 { None } else { cmds.get(idx - 1).copied() };
         let launches = matches!(
             cmd,
-            Some(MenuCmd::ShowSettings | MenuCmd::OpenSettings | MenuCmd::OpenDataFolder | MenuCmd::About | MenuCmd::LyricsCredit | MenuCmd::AppleMusicHelp | MenuCmd::OyenzaOpen)
+            Some(MenuCmd::ShowSettings | MenuCmd::OpenSettings | MenuCmd::OpenDataFolder | MenuCmd::About | MenuCmd::LyricsCredit | MenuCmd::AppleMusicHelp | MenuCmd::YandexMusicHelp | MenuCmd::OyenzaOpen)
         );
         if !launches && !prev.is_invalid() && prev != owner && IsWindow(prev).as_bool() && GetForegroundWindow() == owner {
             let _ = SetForegroundWindow(prev);
