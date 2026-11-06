@@ -14,6 +14,7 @@ use poni_core::viz::{Bands, BANDS};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
+use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::{eRender, AUDCLNT_BUFFERFLAGS_SILENT};
 use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
 
@@ -54,6 +55,24 @@ impl Drop for Viz {
     }
 }
 
+/// Loopback carries Windows' master volume already applied. Undo it, so the
+/// bars follow the track and not the Windows slider. The gain is capped: at a
+/// near-silent endpoint it would otherwise lift the noise floor into the bars.
+fn gain_for(level: f32, muted: bool) -> f32 {
+    if muted || !level.is_finite() || level <= 0.005 {
+        0.0
+    } else {
+        (1.0 / level).clamp(1.0, 20.0)
+    }
+}
+
+fn volume_gain(volume: Option<&IAudioEndpointVolume>) -> f32 {
+    let Some(volume) = volume else { return 1.0 };
+    let muted = unsafe { volume.GetMute() }.map(|m| m.as_bool()).unwrap_or(false);
+    let level = unsafe { volume.GetMasterVolumeLevelScalar() }.unwrap_or(1.0);
+    gain_for(level, muted)
+}
+
 /// The `poni-viz` thread: open the playback device, take what it plays until
 /// told to stop, and report the bars.
 fn run(shared: &Shared) {
@@ -66,6 +85,7 @@ fn run(shared: &Shared) {
             // heard nothing pushes silence: that is what lets a bar fall.
             let quiet = vec![0i16; (RATE as f32 * POLL.as_secs_f32()) as usize];
             while !shared.stop.load(Ordering::SeqCst) {
+                let gain = volume_gain(d.volume.as_ref());
                 let mut heard = false;
                 loop {
                     let frames = match unsafe { d.capture.GetNextPacketSize() } {
@@ -88,6 +108,13 @@ fn run(shared: &Shared) {
                         d.downmix.push(bytes, &mut pcm);
                     }
                     let _ = unsafe { d.capture.ReleaseBuffer(n) };
+                    if gain == 0.0 {
+                        pcm.fill(0);
+                    } else if (gain - 1.0).abs() > 0.01 {
+                        for s in &mut pcm {
+                            *s = (f32::from(*s) * gain).clamp(-32_768.0, 32_767.0) as i16;
+                        }
+                    }
                     bands.push(&pcm);
                     heard = true;
                 }
@@ -110,5 +137,28 @@ fn run(shared: &Shared) {
     // Nothing plays once this ends: every bar back down.
     for level in &shared.levels {
         level.store(0f32.to_bits(), Ordering::Relaxed);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gain_for;
+
+    #[test]
+    fn the_gain_undoes_the_windows_slider() {
+        assert!((gain_for(1.0, false) - 1.0).abs() < 0.001);
+        assert!((gain_for(0.5, false) - 2.0).abs() < 0.001);
+        assert!((gain_for(0.25, false) - 4.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn a_mute_or_a_dead_slider_is_silence() {
+        assert_eq!(gain_for(0.8, true), 0.0);
+        assert_eq!(gain_for(0.0, false), 0.0);
+    }
+
+    #[test]
+    fn a_near_silent_slider_is_capped() {
+        assert_eq!(gain_for(0.01, false), 20.0);
     }
 }

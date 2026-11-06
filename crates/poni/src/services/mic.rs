@@ -30,6 +30,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 use windows::core::{w, GUID, HRESULT};
 use windows::Win32::Foundation::E_ACCESSDENIED;
+use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::{
     eCapture, eConsole, EDataFlow, IAudioCaptureClient, IAudioClient, IMMDeviceEnumerator, MMDeviceEnumerator, AUDCLNT_BUFFERFLAGS_SILENT,
     AUDCLNT_E_DEVICE_INVALIDATED, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_LOOPBACK, WAVEFORMATEX, WAVEFORMATEXTENSIBLE,
@@ -169,6 +170,8 @@ pub(crate) struct Device {
     pub(crate) capture: IAudioCaptureClient,
     pub(crate) downmix: Downmix,
     pub(crate) block: usize,
+    /// The endpoint's own volume, for loopback: `None` for a microphone.
+    pub(crate) volume: Option<IAudioEndpointVolume>,
 }
 
 /// The default recording device, opened in shared mode in its own format.
@@ -186,6 +189,9 @@ pub(crate) fn open_endpoint(flow: EDataFlow, what: &str) -> Result<Device, MicEr
         let devices: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|e| mic_error("no Core Audio", &e))?;
         let device = devices.GetDefaultAudioEndpoint(flow, eConsole).map_err(|e| mic_error(if loopback { "no playback device" } else { "no recording device" }, &e))?;
         let client: IAudioClient = device.Activate(CLSCTX_ALL, None).map_err(|e| mic_error("can't open the microphone", &e))?;
+        // Loopback is captured after Windows' master volume, so the equalizer
+        // divides it back out; a microphone has no endpoint volume to read.
+        let volume: Option<IAudioEndpointVolume> = if loopback { device.Activate(CLSCTX_ALL, None).ok() } else { None };
         let mix = client.GetMixFormat().map_err(|e| mic_error("no recording format", &e))?;
         let format = sample_format(mix);
         let wf = std::ptr::read_unaligned(mix);
@@ -200,7 +206,7 @@ pub(crate) fn open_endpoint(flow: EDataFlow, what: &str) -> Result<Device, MicEr
             return Err(MicError::Failed(format!("recording frames of {block} bytes for {channels} channels")));
         }
         crate::pinfo!("{what} at {rate} Hz, {channels} channel(s), {format:?}");
-        Ok(Device { client, capture, downmix: Downmix::new(rate, channels, format), block })
+        Ok(Device { client, capture, downmix: Downmix::new(rate, channels, format), block, volume })
     }
 }
 
